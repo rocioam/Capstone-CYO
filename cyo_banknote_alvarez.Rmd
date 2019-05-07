@@ -1,0 +1,559 @@
+---
+title: "'Choose Your Own' Project"
+subtitle: "Bank Note Authentication"
+date: May 07, 2019
+author: Rocío Alvarez Mercé 
+output: pdf_document
+indent: TRUE
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo = F}
+# tex / pandoc options for pdf creation
+x <- Sys.getenv("PATH")
+y <- paste(x, "E:\\miktex\\miktex\\bin", sep=";")
+Sys.setenv(PATH = y)
+```
+
+
+
+## Quick Note 
+
+
+Hello! This is my final "Create your Own Project" report. As I said on my MovieLens project (I'm guessing I have different peers assessing this report!), it took a little longer than expected because of work issues, so I apologize for not submitting it before. 
+
+It was written with the idea of presenting it to other people in mind, and let them be able to follow my steps, one by one. As if we were in a class or a little company meeting. That is why I use the pronoun "we" instead of "I" in every part of the report, I guess I'm used to it and I think it gives the readers a better understanding of the analysis and the steps to follow. With this quick note I wanted to emphasize that even if I use "we" in every section, I'm the only author of this report. 
+
+That being said, hope you enjoy it!
+
+
+## 1. Introduction and Goals
+
+For this final project, we chose the Bank Note Authentication dataset, from the UCI Machine Learning Repository, by Volker Lohweg and Helene Darksen from the University of Applied Sciences, Ostwestfalen-Lippe, Germany. This dataset was published in 2012, and helps distinguishing authentic from fake bank notes using different measured parameters. 
+
+We personally chose this dataset because we needed a fairly little dataset since our computer capacity is limited and because we're currently working on a neuroscience biomarkers project that has the exact same characteristics: 4 parameters that would help us classify our measurements into a 2 level factor (in this case **authentic** or **fake**). In other words, a binary classification problem. We wanted to use our own data but we don't have a fair amount of measurements yet, so this will be a good way to prepare ourselves for that set of data when the time comes. 
+
+The goal of this project is firstly, to understand and analyze the dataset; secondly, create different machine learning models and finally compare them, and then pick the one with the best metrics.
+
+
+## 2. Bank Note Authentication dataset
+
+In the Bank Note Authentication set, data was extracted from images that were taken from genuine and counterfeit banknote images. For digitization, an industrial camera usually used for print inspection was used. The final images obtained were 400 x 400 pixels gray-scale pictures, with a resolution of about 660 dpi. Image processing techniques in these cases are not only convenient in extracting useful information for analysis purposes but also saves computation time and memory space. For the Bank Note dataset, the features of the banknotes are extracted using Fast Wavelet Transforms (WT), and then analyzing the WTI (WT Images). Four different attributes were obtained:
+
+- **Variance** of WTI: finds how each pixel varies from the neighboring pixels, and can be used in identifying sharp details such as edges.
+
+- **Skewness** of WTI: it's a measure of symmetry, or more precisely, the lack of symmetry (if the image looks the same or not to the left and to the right of the center -reference- point).
+
+- **Curtosis** of WTI: it's a measure of whether the data is heavy-tailed or light-tailed, relative to a normal distribution.
+
+- **Entropy** of image (also called average information of an image): this is a quantity that measures the degree of randomness in the image.
+
+
+Finally, you can find a last feature on this dataset, that classifies the banknotes in one of two categories: authentic or fake. As we stated before on the previous section of this report, one of the goals of this project is to find a suitable machine learning method to predict this classification given the four parameters described previously, for unseen data (in this case, a test set). 
+
+
+### Packages Installation and Libraries
+
+
+Listed in the code below are the packages we are going to use through this project. Run this code if you don't have them installed or if you are unsure.
+
+
+```{r message=FALSE, warning=FALSE}
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", 
+                                         repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", 
+                                     repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr", 
+                                     repos = "http://cran.us.r-project.org")
+if(!require(AppliedPredictiveModeling)) install.packages("AppliedPredictiveModeling",
+                                     repos="http://R-Forge.R-project.org")
+if(!require(rpart)) install.packages("rpart", 
+                                         repos = "http://cran.us.r-project.org")
+if(!require(randomForest)) install.packages("randomForest", 
+                                         repos = "http://cran.us.r-project.org")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(caret)
+library(dplyr)
+library(AppliedPredictiveModeling)
+library(rpart)
+library(randomForest)
+
+```
+
+
+
+## 3. Getting the data
+
+The dataset can be obtained by three different ways, use whichever you prefer or it's more comfortable depending if you'd rather download the dataset or directly running a piece of code.
+
+
+### 3.1. UCI Repository
+
+The dataset can be downloaded directly from the website of the UCI Machine Learning Repository, using this link: 
+\newline
+\newline
+https://archive.ics.uci.edu/ml/machine-learning-databases/00267/data_banknote_authentication.txt \newline
+
+
+Or by clicking on the "data_banknote_authentication.txt" link from the following URL:
+\newline
+\newline
+https://archive.ics.uci.edu/ml/machine-learning-databases/00267/
+\newline
+ 
+NOTE 1: If you choose to download the dataset from the UCI Repository, it's **very important** that you save the dataset file in .csv format for the code to run properly.
+
+
+
+### 3.2. Git Repo
+
+Another option to get the dataset is to directly download it from my GitHub Repository, following this link:
+\newline
+\newline
+https://github.com/rocioam/Capstone-CYO
+\newline
+
+NOTE 2: If you have chosen either the UCI or the Git Repo download options detailed above, you should run **the following** code to have your dataset ready to use (after moving the .csv file to the same location of the .R or .rmd file, whichever you are running):
+
+
+```{r}
+banknote_auth <- read.csv('data_banknote_authentication.csv', header=FALSE)
+colnames(banknote_auth)<- c("variance_wt","skewness_wt",
+                            "curtosis_wt","entropy","authentic")
+```
+
+
+### 3.3. Running this code
+
+If you don't want or are unable to download the dataset as indicated in options 3.1. or 3.2. detailed above, you can directly run **this piece** of code: 
+
+```{r}
+banknote_auth <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/00267/data_banknote_authentication.txt"),
+                          header=FALSE)
+
+colnames(banknote_auth)<- c("variance_wt","skewness_wt","curtosis_wt","entropy","authentic")
+```
+
+This option is the easiest one in my opinion, but you need to have an active Internet connection. 
+
+
+
+## 4. Data Analysis
+
+If everything went well during section 3, and you were able to successfully download your data, you should now have your **dataframe** saved in the 'banknote_auth' variable. 
+
+```{r}
+class(banknote_auth)
+```
+
+
+If this is not the case, please go back to last section. If everything went all right, let's now analyze our data!
+
+
+### 4.1. Knowing the data
+
+First of all, let's take a quick look to our dataframe, what number and what kind of variables do we have?
+
+```{r}
+dim(banknote_auth)
+
+```
+
+
+```{r}
+head(banknote_auth)
+```
+
+It's also a good idea to look at the class of the attributes we have. Knowing the type is important because it can help you better summarize your data and prepare it for the machine learning algorithms later.
+
+```{r}
+sapply(banknote_auth, class)
+```
+
+
+We can see that we have 1372 rows (observations) and 5 different column variables. As we detailed previously in the introduction, the variance, skewness, curtosis and entropy are four **numeric** parameters used for the detection of fake banknotes. The last column, **authentic** is a binary classification label (**integer** class) to indicate wheter a banknote is genuine (authentic col = 1) or fake (authentic col = 0). We are going to focus on this column since it's what we want to predict after.
+
+
+### 4.2. Classification Levels and dataset
+
+Let's make a summary of the statistics for the classification column:
+
+
+```{r}
+summary(banknote_auth$authentic)
+```
+
+If we take a closer look at the **authentic** column, we can see that the mean is lower than 0.5, meaning we must have more fake observations than genuine ones.
+
+
+We can plot an histogram to confirm this:
+
+```{r}
+library(ggplot2)
+banknote_auth %>% ggplot(aes(factor(authentic), 
+                          fill = authentic )) + guides(fill = F) +
+  geom_bar() + labs(y = "Count", x = "", title = "Banknotes Count") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_discrete(labels=c("Fake", "Authentic"))
+```
+
+We can see from this plot that we don't have the same number of instances for each class: we have more fake banknotes than authentic ones in our dataset, as we determined earlier by looking at the dataset summary. The difference is not very big, thus having a good number of samples for each classification.
+
+
+To summarize the information we see on the previous figure, we can use the _cbind_ function.
+
+
+```{r}
+percentage <- prop.table(table(banknote_auth$authentic)) * 100
+cbind(Count = table(banknote_auth$authentic), Percentage = percentage)
+
+```
+
+We see that we have 762 fake banknotes and 610 authentic ones in our dataset, meaning a 55,5% and a 44.4% of the dataset respectively.
+
+We see from this analysis that it's better if we convert this column to a **factor** class, so we have the two levels that we want for following analyses:
+
+```{r}
+banknote_auth$authentic <- as.factor(banknote_auth$authentic)
+```
+
+Now our class value is a factor with two levels, 0 for fake banknotes and 1 for genuine ones.
+
+
+```{r}
+class(banknote_auth$authentic)
+levels(banknote_auth$authentic)
+```
+
+
+
+### 4.3. Attribute analysis
+
+Now that we have already taken a peek to the **authentic** column, we can look at and summarize the rest of the data we have in our dataset. First of all, by looking at all columns, and see what kind of parameters we have.
+
+```{r}
+summary(banknote_auth)
+```
+
+
+It's hard to analyze the data we have from this table, so we're going to use some visualization tools to make ir clearer.
+First, we are going to plot all four parameters in a boxplot graph:
+
+```{r}
+x <- banknote_auth[,1:4]
+y <- banknote_auth[,5]
+```
+
+```{r}
+par(mfrow = c(1,4))
+  for(i in 1:4) {
+   boxplot(x[,i], col = 'powderblue', main = names(banknote_auth)[i]) 
+  }
+```
+
+We can see on this boxplot figure the distribution of the four parameters that we have: variance, skewness, curtosis and entropy. Variance and skewness parameters are closer in values and distribution, while curtosis and entropy show different values and behaviour.
+
+
+
+
+But how do these parameters change depending if the banknote is fake or authentic? To start to visualize this, we can make different plots. Let's plot again boxplot, but this time taking into account the label **authentic** (1) or **fake** (0):
+
+```{r}
+featurePlot(x = x, y = y, "box")
+```
+
+We can see that entropy does not vary for the two different levels, curtosis presents a small variation, but the wide errors make it difficult to actually see difference from the data. Skewness and Variance are the two parameters that present the biggest difference between authentic and fake samples, though skewness present larger errors.  
+
+
+
+We can further look into this with a density plot, in this case plotted again for all 4 values:
+
+```{r}
+transparentTheme(trans = .9)
+featurePlot(x = x, 
+            y = y,
+            plot = "density", 
+            scales = list(x = list(relation="free"), 
+                          y = list(relation="free")), 
+            adjust = 1.5, 
+            pch = "|", 
+            layout = c(2, 2), 
+            auto.key = list(columns = 2))
+```
+
+
+We confirm what we concluded earlier: entropy presents little or no variation between the two classification levels, curtosis presents a small difference, while variance and skewness are the best parameters if we look at them one by one.
+
+
+
+
+
+So, we have seen now, with the last two plots, that with only one parameter at one time, we can't really distinguish two levels. for our binary classification process. Let's see what happens when we plot these variables against each other, for both levels: fake (in red) and authentic (in blue). To achieve this, we use the featurePlot function as we can see on the following figure.
+
+
+```{r}
+transparentTheme(set = TRUE, pchSize = 0.4, trans = .6)
+featurePlot(x = banknote_auth[,1:4], y = banknote_auth[,5], "ellipse",
+            auto.key = list(columns = 2))
+```
+
+
+We can conclude from this graph that some parameter combinations can help us classify our banknotes dataset. For example, we see a clustering process happening when we compare **variance** and **skewness**, or **variance** and **curtosis**. On the other hand, some parameters don't help us find a significative difference between counterfeit and genuine samples: for example, **curtosis** vs. **entropy**.  
+
+
+
+
+
+
+##5. Machine Learning 
+
+
+###5.1. Creating train and test sets
+
+We need to create our train and test sets out of the *banknote_auth* dataframe. So, a standard way to do this is by randomly splitting the data. We will use the caret package (already loaded) and the function createDataPartition. We chose to select 20% (p = 0.2) of the data. The test set will be only used to test the performance of the model later. 
+
+
+```{r}
+set.seed(60) 
+test_index <- createDataPartition(banknote_auth$authentic, times = 1, p = 0.2, list = F)
+train_set <- banknote_auth[-test_index,]
+test_set <- banknote_auth[test_index,]
+```
+
+
+```{r}
+dimtrain <- dim(train_set)
+dimtest <- dim(test_set)
+dimtrain
+dimtest
+```
+
+We now have two sets, the **train set** with `r dimtrain[1]` samples, the **test set** with `r dimtest[2]` samples, and both having of course the five columns of the original dataset.
+
+
+Let's check if the distribution of the variable we want to predict, **authentic** in this case, is balanced in each dataset, as we should expect:
+
+
+```{r}
+checktrain <- table(train_set$authentic)/nrow(train_set)
+checktest <- table(test_set$authentic)/nrow(test_set)
+
+
+
+checktable <- matrix(c(checktrain[1],checktest[1],checktrain[2],checktest[2]), 
+                     ncol=2)
+colnames(checktable) <- c('Fake (= 0)', 'Authentic (=1 )')
+rownames(checktable) <- c('Train Set', ' Test Set')
+
+as.table(checktable)
+
+
+```
+
+
+We see that the createDataPartition function has created our train and test sets balanced. We are now going to test different machine learning algorithms as we said before, in the introduction of this report, starting with a baseline model.
+
+
+###5.2. Baseline Model: Logistic Regression
+
+We have seen on the courses than Linear Regression is one of the simplest forms of Machine Learning, even if sometimes it's too rigid for some datasets. Furthermore, it serves as a baseline approach to start trying different Machine Learning algorithms to look for the best model. In this case, we are going to apply a Logistic Regression method, an extension of Linear Regression, dedicated to classification tasks. We are going to use the four predictors for this model (variance, skewness, curtosis and entropy). We use this piece of code:
+
+```{r message=FALSE}
+glm_fit <- train_set %>% glm(authentic ~ variance_wt + skewness_wt 
+                             + curtosis_wt + entropy, data =., family = "binomial")
+
+p_hat_logit <- predict(glm_fit, newdata = test_set, type = "response")
+```
+
+To get the predictions, we use:
+
+```{r}
+y_hat_logit <- ifelse(p_hat_logit > 0.5, 1, 0) %>% factor(levels = c(0, 1))
+confusionMatrix(y_hat_logit, test_set$authentic)
+```
+
+We can see that we have an accuracy of 97.8%. This dataset is fairly simple, that's why we already have a very good accuracy, but we can still see that the algorithm misplaced 6 different samples. Let's see if we can improve this. For that purpose, we are going to create a table to put the results we get for each model we test:
+
+```{r}
+acc_baseline <- confusionMatrix(y_hat_logit, test_set$authentic)$overall[1]
+accuracy_results <- data_frame(Method = "Baseline Model", Accuracy = acc_baseline)
+
+accuracy_results
+```
+
+
+#### Note on **entropy** parameter
+
+One thing that's interesting to note here, is that from the data analysis part, we have seen that entropy didn't give us much information to classify the banknotes. Just for fun and exploring, we are going to run again the code, without using **entropy** as a predictor, to see how it performs. Here it is: 
+
+
+```{r warning=FALSE}
+glm_fit2 <- train_set %>% glm(authentic ~ variance_wt + skewness_wt + 
+                                curtosis_wt, data =., family = "binomial")
+
+p_hat_logit2 <- predict(glm_fit2, newdata = test_set, type = "response")
+
+y_hat_logit2 <- ifelse(p_hat_logit2 > 0.5, 1, 0) %>% factor(levels = c(0, 1))
+confusionMatrix(y_hat_logit2, test_set$authentic)
+```
+
+We see that we obtain the same results either taking or not into account the **entropy** parameter, but if we take one of the others predictors out of the equation we perform worse (we are not going to show it here not to make this report too long, but if we just eliminate curtosis from the model for example, we have a worse accuracy). So, it would be interesting to see if **entropy** is really an useful parameter, or just as the data analysis and this code showed us, it doesn't improve our classification goal.
+
+
+
+###5.3. Classification/Decision Trees 
+
+How can we draw a decision tree from this data? Is the **entropy** behaviour going to be reflected in it? Let's find out. With this code, we split the predictors into different regions, and then, using the observations in a particular region, a prediction is made. For this part
+
+```{r}
+fit_tree <- rpart(banknote_auth$authentic~., data = banknote_auth)
+fit_tree
+```
+
+We can visually see where the splits were made using this code:
+
+```{r}
+plot(fit_tree)
+text(fit_tree, cex = 0.7)
+```
+
+We see that, as we would think by looking at our previous data analysis, that **variance** is a main predictor when it comes to distinguish between counterfeit and genuine banknotes. Then, both **curtosis** and **skewness** are important when we want to make this classification. Finally, as we also pointed before, **entropy** appears at the end, as a predictor with a minor weight than the other three. 
+
+
+Now, as a second method, we are going to see how well a Decision Tree algorithm performs on the training data. We also try to find the best complexity parameter *cp* using cross-validation. This may not be the best for this kind of simple datasets, but for a more exploratory objective we are going to do it.
+
+```{r}
+xrpart <- train_set[, 1:4]
+yrpart <- train_set$authentic
+train_rpart <- train(xrpart, yrpart, method = "rpart", 
+                     tuneGrid = data.frame(cp = seq (0,0.8,len = 35)))
+
+```
+
+Now we can plot the accuracy obtained for each *cp* value:
+
+```{r}
+plot(train_rpart)
+```
+
+We see that the maximum accuracy (thus, the best fit) is achieved with *cp* = 0. We suppose this happens because the tree is heavily pruned beforehand because of the nature of the data.
+
+
+To see how well it performed on our data, we use the following code:
+
+```{r}
+acc_tree <- confusionMatrix(predict(train_rpart, test_set), test_set$authentic)$overall["Accuracy"]
+confusionMatrix(predict(train_rpart, test_set), test_set$authentic)
+acc_tree
+```
+
+We obtain an accuracy of about 98%. This accuracy is better than the one reached by our baseline method, we now have less misplaced predictions (less false positives and false negatives):
+
+```{r}
+accuracy_results <- bind_rows(accuracy_results,
+                          data_frame(Method = "Decision Tree", 
+                                     Accuracy = acc_tree))
+accuracy_results
+```
+
+
+
+
+
+###5.4. Random Forest
+
+The third model we are going to test is the Random Forest approach: the goal is to improve prediction performance and reduce instabiliy by averaging multiple decision trees, a forest of trees constructed with randomness. We use our training data this way:
+
+```{r}
+train_rf <- randomForest(train_set$authentic~., data = train_set)
+confusionMatrix(predict(train_rf, test_set), test_set$authentic)
+acc_rf <- confusionMatrix(predict(train_rf, test_set), test_set$authentic)$overall[1]
+```
+
+
+We see that we have improved our accuracy by 1%, thus now reaching 99%. We can apply the "Rborist" method to try and get a better accuracy, but we won't do it on this report because of computing capacity. Updating the table, we get:
+
+```{r}
+accuracy_results <- bind_rows(accuracy_results,
+                          data_frame(Method = "Random Forest", 
+                                     Accuracy = acc_rf))
+accuracy_results
+```
+
+
+###5.5. K-nearest Neighbours (KNN)
+
+To try to get an even higher accuracy for this dataset, we are now going to use the KNN approach. Using this model, for any point for which we want to estimate the conditional probability, we are going to look at the k-nearest points and then take an average of these points. To use this method we are going to run the following piece of code:
+
+
+```{r}
+knn_fit <- knn3(train_set$authentic ~., data = train_set, k = 5)
+
+y_hat_knn <- predict(knn_fit, test_set, type = "class")
+confusionMatrix(data = y_hat_knn, reference = test_set$authentic)
+```
+
+Using a value of k = 5, we get 100% accuracy, beating of course all previous models used. We add it to the accuracy results table.
+
+
+```{r}
+acc_knn <- confusionMatrix(y_hat_knn, test_set$authentic)$overall[1]
+accuracy_results <- bind_rows(accuracy_results,
+                          data_frame(Method = "KNN", 
+                                     Accuracy = acc_knn))
+
+accuracy_results
+```
+
+
+
+
+What happens if instead of taking all predictors, as we noticed before, we only take the most important ones and we leave **entropy** out? Last time, it didn't have any improvement in the final accuracy. Let's try this for the KNN model. 
+
+```{r}
+knn_fit2 <- train_set %>% knn3(authentic ~ variance_wt + skewness_wt + curtosis_wt, data =.)
+
+y_hat_knn2 <- predict(knn_fit2, test_set, type = "class")
+confusionMatrix(data = y_hat_knn2, reference = test_set$authentic)
+```
+
+In this case, we see that **entropy** is an important predictor to take into account, because without it, we just showed that our accuracy decreases to 98%. Still, using KNN methods with only three predictors gives us a better accuracy than using the baseline model or a decision tree method with all four predictors!
+
+
+
+##6. Conclusions
+
+The objective of this report was getting to know the Banknote Authentication dataset from the UCI Repository, play a little with the variables and the parameters we had to get to know the data, and then explore different Machine Learning models and see how they perform, and if we could get a good accuracy. 
+
+We went through the package installation, data download and analysis on the first sections, and then tried different approaches to get a high accuracy value, starting from the simplest approach possible: the baseline Approach (here, it was Logistic Regression), to others as Decision Tree, Random Forest and K-Nearest Neighbors.
+
+We found that with the baseline approach we obtained an accuracy of around 97%, which is not bad at all, due to the fairly simple nature of this dataset. Then, we compared it to other models, achieving 98% and 99% for Decision Tree and Random Forest models respectively. Finally, we got 100% accuracy using the KNN algorithm, with *k* set to 5.
+
+We also remarked, both during the data analysis and the Machine Learning sections, that the **entropy** predictor was the less imporant one: we got a better accuracy for the KNN method with only 3 predictors (**variance**, **skewness** and **curtosis**), compared to the Baseline Model or the Decision Tree model, that performed worse with all 4 predictors. Still, **entropy** it's an important predictor if our goal is to achieve the best accuracy possible.
+
+
+
+##7. Personal Comments (and more conclusions)
+
+Some personal comments I wanted to write about this project: I liked very much doing it, playing with the data and the graphs, to explore and put into this project all the hard work done on the past few months. When I started with this whole Data Science course (the 9 of them!), I didn't even know how to install RStudio, and now I'm so proud that I am able to write a whole report, do some analysis on the data and test it on different Machine Learning models, and even more, try to improve its accuracy.
+
+I achieved 100% accuracy because, as I noted before, the banknote authentication set is fairly simple, but this won't probably happen in my future classification algorithm that I am going to develop for my neuroscience project during the next few months (as I mentioned in the introduction), because it won't be data as neat and classifiable as this one, but going through different models was fun and enlightening, and has given me a very wide approach to all that I can do in the future. 
+
+Thank you all and I hope you enjoyed this report!
+
+
+
+### GitHub repo: https://github.com/rocioam/Capstone-CYO
+
+
